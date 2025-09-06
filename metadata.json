@@ -1,0 +1,5 @@
+{
+  "name": "FaceMedia Studio",
+  "description": "An AI-powered media creation web application to generate and edit images and videos. Features an iterative workflow, persistent creation gallery using IndexedDB, and advanced prompting assistance tools.",
+  "requestFramePermissions": []
+}
