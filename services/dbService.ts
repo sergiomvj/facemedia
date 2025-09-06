@@ -3,7 +3,8 @@ import type { Creation } from '../types';
 
 const DB_NAME = 'FaceMediaDB';
 const STORE_NAME = 'creations';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Bump version for schema change
+const USER_ID_INDEX = 'userIdIndex';
 
 let db: IDBDatabase;
 
@@ -25,8 +26,15 @@ const initDB = (): Promise<IDBDatabase> => {
 
         request.onupgradeneeded = (event) => {
             const dbInstance = (event.target as IDBOpenDBRequest).result;
+            let store: IDBObjectStore;
             if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
-                dbInstance.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                store = dbInstance.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            } else {
+                store = (event.target as any).transaction.objectStore(STORE_NAME);
+            }
+
+            if (!store.indexNames.contains(USER_ID_INDEX)) {
+                store.createIndex(USER_ID_INDEX, 'userId', { unique: false });
             }
         };
     });
@@ -52,13 +60,14 @@ export const addCreation = async (creationData: Omit<Creation, 'id'>): Promise<v
     });
 };
 
-export const getCreations = async (): Promise<Creation[]> => {
+export const getCreations = async (userId: string): Promise<Creation[]> => {
     const db = await initDB();
     const transaction = db.transaction(STORE_NAME, 'readonly');
     const store = transaction.objectStore(STORE_NAME);
+    const index = store.index(USER_ID_INDEX);
 
     return new Promise((resolve, reject) => {
-        const request = store.getAll();
+        const request = index.getAll(userId);
         request.onsuccess = () => {
             // Sort by ID descending to show newest first
             resolve(request.result.sort((a, b) => b.id - a.id));

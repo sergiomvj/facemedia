@@ -6,13 +6,20 @@ import { Header } from './components/Header';
 import { CreationGalleryModal } from './components/CreationGalleryModal';
 import { PromptHelperModal } from './components/PromptHelperModal';
 import { PromptEditorModal } from './components/PromptEditorModal';
+import { LoginScreen } from './components/LoginScreen';
+import { Spinner } from './components/Spinner';
+import { useAuth } from './contexts/AuthContext';
 import { addCreation, getCreations, deleteCreation as dbDeleteCreation } from './services/dbService';
 import * as geminiService from './services/geminiService';
 import { VIDEO_GENERATION_MESSAGES } from './constants';
 import type { Mode, ImageFile, MediaResult, Creation, AspectRatio, PromptHelperTab } from './types';
 import { fileToBase64 } from './utils/fileUtils';
 
+const MAX_HISTORY_LENGTH = 20;
+
 const App: React.FC = () => {
+    const { user, loading: authLoading } = useAuth();
+
     const initialState = {
         mode: 'Image' as Mode,
         prompt: '',
@@ -41,13 +48,24 @@ const App: React.FC = () => {
     const [isNegativePromptEditorOpen, setNegativePromptEditorOpen] = useState<boolean>(false);
     const [initialHelperTab, setInitialHelperTab] = useState<PromptHelperTab>('guide');
 
+    const [promptHistory, setPromptHistory] = useState<string[]>(() => JSON.parse(localStorage.getItem('promptHistory') || '[]'));
+    const [negativePromptHistory, setNegativePromptHistory] = useState<string[]>(() => JSON.parse(localStorage.getItem('negativePromptHistory') || '[]'));
+
+    useEffect(() => {
+        localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
+    }, [promptHistory]);
+
+    useEffect(() => {
+        localStorage.setItem('negativePromptHistory', JSON.stringify(negativePromptHistory));
+    }, [negativePromptHistory]);
 
     const isEditingImage = mode === 'Image' && !!baseImage;
 
     const loadCreations = useCallback(async () => {
-        const items = await getCreations();
+        if (!user) return;
+        const items = await getCreations(user.uid);
         setCreations(items);
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         loadCreations();
@@ -64,8 +82,10 @@ const App: React.FC = () => {
     };
 
     const saveAndSetResult = async (result: MediaResult) => {
+        if (!user) return;
         setMediaResult(result);
         const creation: Omit<Creation, 'id'> = {
+            userId: user.uid,
             mode,
             prompt,
             negativePrompt,
@@ -78,9 +98,27 @@ const App: React.FC = () => {
         await loadCreations();
     };
 
+    const updateHistory = (
+      text: string, 
+      history: string[], 
+      setHistory: React.Dispatch<React.SetStateAction<string[]>>
+    ) => {
+        const trimmedText = text.trim();
+        if (!trimmedText) return;
+        
+        const newHistory = [trimmedText, ...history.filter(item => item !== trimmedText)];
+        setHistory(newHistory.slice(0, MAX_HISTORY_LENGTH));
+    };
+
     const handleGenerate = async () => {
+        if (!user) return;
         setIsLoading(true);
         setMediaResult(null);
+
+        updateHistory(prompt, promptHistory, setPromptHistory);
+        if (negativePrompt) {
+          updateHistory(negativePrompt, negativePromptHistory, setNegativePromptHistory);
+        }
 
         try {
             if (mode === 'Image') {
@@ -176,6 +214,18 @@ const App: React.FC = () => {
         setPromptHelperOpen(true);
     };
 
+    if (authLoading) {
+        return (
+            <div className="min-h-screen bg-slate-900 flex justify-center items-center">
+                <Spinner className="w-10 h-10" />
+            </div>
+        );
+    }
+
+    if (!user) {
+        return <LoginScreen />;
+    }
+
     return (
         <div className="min-h-screen bg-slate-900 font-sans flex flex-col">
             <Header onGalleryClick={() => setGalleryOpen(true)} />
@@ -202,6 +252,8 @@ const App: React.FC = () => {
                         onOpenPromptEditor={() => setPromptEditorOpen(true)}
                         onOpenNegativePromptEditor={() => setNegativePromptEditorOpen(true)}
                         onOpenPromptHelper={openPromptHelper}
+                        promptHistory={promptHistory}
+                        negativePromptHistory={negativePromptHistory}
                     />
                 </div>
                 <div className="md:col-span-8 lg:col-span-9">

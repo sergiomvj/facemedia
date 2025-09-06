@@ -19,6 +19,7 @@ export interface MediaResult {
 
 export interface Creation {
   id: number; // Using timestamp as ID
+  userId: string; // Firebase User UID
   mode: Mode;
   prompt: string;
   negativePrompt: string;
@@ -30,6 +31,6 @@ export interface Creation {
 
 export type GeminiImageGenConfig = {
     numberOfImages: number;
-    outputMimeType: 'image/jpeg';
+    outputMimeType: 'image/jpeg' | 'image/png';
     aspectRatio: AspectRatio;
 };

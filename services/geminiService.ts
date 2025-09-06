@@ -1,5 +1,6 @@
 
-import { GoogleGenAI, GenerateContentResponse, Modality, Type, VideosOperation } from "@google/genai";
+// Fix: Removed 'VideosOperation' as it is not an exported member of the '@google/genai' package.
+import { GoogleGenAI, GenerateContentResponse, Modality, Type } from "@google/genai";
 import type { ImageFile, MediaResult, AspectRatio, GeminiImageGenConfig } from '../types';
 
 if (!process.env.API_KEY) {
@@ -16,7 +17,13 @@ const imageFileToPart = (imageFile: ImageFile) => ({
     },
 });
 
-export const generateImage = async (prompt: string, negativePrompt: string, aspectRatio: AspectRatio): Promise<MediaResult> => {
+export const generateImage = async (
+    prompt: string,
+    negativePrompt: string,
+    aspectRatio: AspectRatio,
+    numberOfImages: number = 1,
+    outputMimeType: 'image/jpeg' | 'image/png' = 'image/jpeg'
+): Promise<MediaResult> => {
     if (!prompt) throw new Error("Prompt is required for image generation.");
 
     const fullPrompt = negativePrompt ? `${prompt}, negative prompt: ${negativePrompt}` : prompt;
@@ -25,14 +32,18 @@ export const generateImage = async (prompt: string, negativePrompt: string, aspe
         model: 'imagen-4.0-generate-001',
         prompt: fullPrompt,
         config: {
-            numberOfImages: 1,
-            outputMimeType: 'image/jpeg',
+            numberOfImages: numberOfImages,
+            outputMimeType: outputMimeType,
             aspectRatio: aspectRatio,
         } as GeminiImageGenConfig,
     });
     
+    if (!response.generatedImages || response.generatedImages.length === 0) {
+        throw new Error("Image generation did not return any images.");
+    }
+
     const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-    const imageUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
+    const imageUrl = `data:${outputMimeType};base64,${base64ImageBytes}`;
     return { type: 'image', src: imageUrl };
 };
 
@@ -73,7 +84,8 @@ export const editImage = async (prompt: string, baseImage: ImageFile, blendImage
 export const generateVideo = async (prompt: string, baseImage: ImageFile | null): Promise<MediaResult> => {
     if (!prompt) throw new Error("Prompt is required for video generation.");
     
-    let operation: VideosOperation;
+    // Fix: Removed 'VideosOperation' type annotation. The type will be inferred from the function return value.
+    let operation;
 
     if (baseImage) {
         operation = await ai.models.generateVideos({
