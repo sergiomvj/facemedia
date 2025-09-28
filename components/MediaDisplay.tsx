@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { MediaResult } from '../types';
-import { DownloadIcon, WandIcon, LogoIcon, PlayIcon, PauseIcon, VolumeMuteIcon, VolumeHighIcon, FullscreenIcon } from './icons';
+import { DownloadIcon, WandIcon, LogoIcon, PlayIcon, PauseIcon, VolumeMuteIcon, VolumeHighIcon, FullscreenIcon, RemoveBgIcon } from './icons';
 
 const formatTime = (timeInSeconds: number) => {
     if (isNaN(timeInSeconds)) return '00:00';
@@ -182,7 +183,7 @@ const VideoPlayer: React.FC<{ src: string, onDownload: () => void }> = ({ src, o
     );
 };
 
-const MediaContent: React.FC<{ result: MediaResult; onUseAsBase: () => void }> = ({ result, onUseAsBase }) => {
+const MediaContent: React.FC<{ result: MediaResult; onUseAsBase: () => void; onRemoveBackground: () => void; }> = ({ result, onUseAsBase, onRemoveBackground }) => {
     const downloadMedia = () => {
         if (!result.src) return;
         const link = document.createElement('a');
@@ -205,8 +206,11 @@ const MediaContent: React.FC<{ result: MediaResult; onUseAsBase: () => void }> =
                     <button onClick={downloadMedia} className="flex items-center gap-2 px-4 py-2 bg-slate-800/80 rounded-md hover:bg-slate-700/80 transition">
                         <DownloadIcon /> Download
                     </button>
+                     <button onClick={onRemoveBackground} className="flex items-center gap-2 px-4 py-2 bg-slate-800/80 rounded-md hover:bg-slate-700/80 transition">
+                        <RemoveBgIcon /> Remove BG
+                    </button>
                     <button onClick={onUseAsBase} className="flex items-center gap-2 px-4 py-2 bg-indigo-600/80 rounded-md hover:bg-indigo-500/80 transition">
-                        <WandIcon /> Use as Base Image
+                        <WandIcon /> Use as Base
                     </button>
                 </div>
             </div>
@@ -221,9 +225,10 @@ interface MediaDisplayProps {
     isLoading: boolean;
     loadingMessage: string;
     onUseAsBase: () => void;
+    onRemoveBackground: () => void;
 }
 
-export const MediaDisplay: React.FC<MediaDisplayProps> = ({ mediaResult, isLoading, loadingMessage, onUseAsBase }) => {
+export const MediaDisplay: React.FC<MediaDisplayProps> = ({ mediaResult, isLoading, loadingMessage, onUseAsBase, onRemoveBackground }) => {
     return (
         <div className="bg-slate-800 rounded-lg p-4 flex flex-col justify-center items-center h-full min-h-[400px] md:min-h-0">
             {isLoading ? (
@@ -243,7 +248,7 @@ export const MediaDisplay: React.FC<MediaDisplayProps> = ({ mediaResult, isLoadi
                    ) : (
                        <>
                            <div className="flex-grow flex items-center justify-center relative w-full h-full">
-                               <MediaContent result={mediaResult} onUseAsBase={onUseAsBase} />
+                               <MediaContent result={mediaResult} onUseAsBase={onUseAsBase} onRemoveBackground={onRemoveBackground} />
                            </div>
                            {mediaResult.text && (
                                <div className="flex-shrink-0 bg-slate-700 p-3 rounded-md max-h-24 overflow-y-auto">

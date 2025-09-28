@@ -11,7 +11,7 @@ import { Spinner } from './components/Spinner';
 import { useAuth } from './contexts/AuthContext';
 import { addCreation, getCreations, deleteCreation as dbDeleteCreation } from './services/dbService';
 import * as geminiService from './services/geminiService';
-import { VIDEO_GENERATION_MESSAGES } from './constants';
+import { VIDEO_GENERATION_MESSAGES, STYLE_PRESETS } from './constants';
 import type { Mode, ImageFile, MediaResult, Creation, AspectRatio, PromptHelperTab } from './types';
 import { fileToBase64 } from './utils/fileUtils';
 
@@ -28,6 +28,9 @@ const App: React.FC = () => {
         blendImage: null as ImageFile | null,
         aspectRatio: '1:1' as AspectRatio,
         mediaResult: null as MediaResult | null,
+        videoLength: 5,
+        frameRate: 24,
+        selectedStylePreset: null as string | null,
     };
 
     const [mode, setMode] = useState<Mode>(initialState.mode);
@@ -36,6 +39,9 @@ const App: React.FC = () => {
     const [baseImage, setBaseImage] = useState<ImageFile | null>(initialState.baseImage);
     const [blendImage, setBlendImage] = useState<ImageFile | null>(initialState.blendImage);
     const [aspectRatio, setAspectRatio] = useState<AspectRatio>(initialState.aspectRatio);
+    const [videoLength, setVideoLength] = useState<number>(initialState.videoLength);
+    const [frameRate, setFrameRate] = useState<number>(initialState.frameRate);
+    const [selectedStylePreset, setSelectedStylePreset] = useState<string | null>(initialState.selectedStylePreset);
     
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [loadingMessage, setLoadingMessage] = useState<string>('');
@@ -79,6 +85,9 @@ const App: React.FC = () => {
         setBlendImage(initialState.blendImage);
         setAspectRatio(initialState.aspectRatio);
         setMediaResult(initialState.mediaResult);
+        setVideoLength(initialState.videoLength);
+        setFrameRate(initialState.frameRate);
+        setSelectedStylePreset(initialState.selectedStylePreset);
     };
 
     const saveAndSetResult = async (result: MediaResult) => {
@@ -93,6 +102,9 @@ const App: React.FC = () => {
             blendImage,
             aspectRatio,
             result,
+            videoLength: mode === 'Video' ? videoLength : undefined,
+            frameRate: mode === 'Video' ? frameRate : undefined,
+            stylePreset: selectedStylePreset || undefined,
         };
         await addCreation(creation);
         await loadCreations();
@@ -129,7 +141,19 @@ const App: React.FC = () => {
                     await saveAndSetResult(result);
                 } else {
                     setLoadingMessage('Creating new image...');
-                    const result = await geminiService.generateImage(prompt, negativePrompt, aspectRatio);
+                    
+                    let finalPrompt = prompt;
+                    let finalNegativePrompt = negativePrompt;
+
+                    if (selectedStylePreset) {
+                        const preset = STYLE_PRESETS.find(p => p.name === selectedStylePreset);
+                        if (preset) {
+                            finalPrompt = [prompt, preset.prompt].filter(Boolean).join(', ');
+                            finalNegativePrompt = [negativePrompt, preset.negativePrompt].filter(Boolean).join(', ');
+                        }
+                    }
+
+                    const result = await geminiService.generateImage(finalPrompt, finalNegativePrompt, aspectRatio);
                     await saveAndSetResult({ type: 'image', src: result.src });
                 }
             } else if (mode === 'Video') {
@@ -139,7 +163,7 @@ const App: React.FC = () => {
                     messageIndex++;
                 }, 3000);
 
-                const result = await geminiService.generateVideo(prompt, baseImage);
+                const result = await geminiService.generateVideo(prompt, baseImage, videoLength, frameRate);
                 clearInterval(messageInterval);
                 await saveAndSetResult(result);
             }
@@ -150,6 +174,38 @@ const App: React.FC = () => {
         } finally {
             setIsLoading(false);
             setLoadingMessage('');
+        }
+    };
+
+    const handleRemoveBackground = async (image: ImageFile) => {
+        if (!user || !image) return;
+        setIsLoading(true);
+        setMediaResult(null);
+        setLoadingMessage('Removing background...');
+        try {
+            const result = await geminiService.removeBackground(image);
+            await saveAndSetResult(result);
+        } catch (error) {
+            console.error("Background removal failed:", error);
+            const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+            setMediaResult({ type: 'text', text: `Error: ${errorMessage}` });
+        } finally {
+            setIsLoading(false);
+            setLoadingMessage('');
+        }
+    };
+
+    const onRemoveBackgroundFromDisplay = () => {
+        if (mediaResult?.type === 'image' && mediaResult.src) {
+            // Convert data URL back to ImageFile format
+            const [header, base64Data] = mediaResult.src.split(',');
+            const mimeType = header.match(/:(.*?);/)?.[1] || 'image/png';
+            const imageFile: ImageFile = {
+                data: base64Data,
+                mimeType: mimeType,
+                name: 'generated-image.png'
+            };
+            handleRemoveBackground(imageFile);
         }
     };
     
@@ -189,6 +245,11 @@ const App: React.FC = () => {
         setBlendImage(creation.blendImage);
         setAspectRatio(creation.aspectRatio as AspectRatio);
         setMediaResult(creation.result);
+        if (creation.mode === 'Video') {
+            setVideoLength(creation.videoLength || initialState.videoLength);
+            setFrameRate(creation.frameRate || initialState.frameRate);
+        }
+        setSelectedStylePreset(creation.stylePreset || null);
         setGalleryOpen(false);
     };
 
@@ -244,9 +305,16 @@ const App: React.FC = () => {
                         removeImage={(type) => type === 'base' ? setBaseImage(null) : setBlendImage(null)}
                         aspectRatio={aspectRatio}
                         setAspectRatio={setAspectRatio}
+                        videoLength={videoLength}
+                        setVideoLength={setVideoLength}
+                        frameRate={frameRate}
+                        setFrameRate={setFrameRate}
+                        selectedStylePreset={selectedStylePreset}
+                        setSelectedStylePreset={setSelectedStylePreset}
                         isLoading={isLoading}
                         loadingMessage={loadingMessage}
                         onGenerate={handleGenerate}
+                        onRemoveBackground={handleRemoveBackground}
                         onClearAll={handleClearAll}
                         onTranslate={handleTranslatePrompt}
                         onOpenPromptEditor={() => setPromptEditorOpen(true)}
@@ -262,6 +330,7 @@ const App: React.FC = () => {
                         isLoading={isLoading}
                         loadingMessage={loadingMessage}
                         onUseAsBase={handleUseAsBase}
+                        onRemoveBackground={onRemoveBackgroundFromDisplay}
                     />
                 </div>
             </main>

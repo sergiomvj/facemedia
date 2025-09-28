@@ -4,7 +4,8 @@ import type { Mode, ImageFile, AspectRatio, PromptHelperTab } from '../types';
 import { ImageUploader } from './ImageUploader';
 import { AspectRatioSelector } from './AspectRatioSelector';
 import { Spinner } from './Spinner';
-import { EditIcon, HistoryIcon, LightbulbIcon, TranslateIcon, TrashIcon, WandIcon } from './icons';
+import { EditIcon, HistoryIcon, LightbulbIcon, RemoveBgIcon, TranslateIcon, TrashIcon, WandIcon } from './icons';
+import { StylePresetSelector } from './StylePresetSelector';
 
 interface ControlPanelProps {
     mode: Mode;
@@ -19,9 +20,16 @@ interface ControlPanelProps {
     removeImage: (type: 'base' | 'blend') => void;
     aspectRatio: AspectRatio;
     setAspectRatio: (ratio: AspectRatio) => void;
+    videoLength: number;
+    setVideoLength: (length: number) => void;
+    frameRate: number;
+    setFrameRate: (rate: number) => void;
+    selectedStylePreset: string | null;
+    setSelectedStylePreset: (preset: string | null) => void;
     isLoading: boolean;
     loadingMessage: string;
     onGenerate: () => void;
+    onRemoveBackground: (image: ImageFile) => void;
     onClearAll: () => void;
     onTranslate: (text: string, type: 'main' | 'negative') => void;
     onOpenPromptEditor: () => void;
@@ -78,8 +86,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     const {
         mode, setMode, prompt, setPrompt, negativePrompt, setNegativePrompt,
         baseImage, blendImage, onImageUpload, removeImage,
-        aspectRatio, setAspectRatio, isLoading, loadingMessage,
-        onGenerate, onClearAll, onTranslate, onOpenPromptEditor, onOpenNegativePromptEditor, onOpenPromptHelper,
+        aspectRatio, setAspectRatio, videoLength, setVideoLength, frameRate, setFrameRate,
+        selectedStylePreset, setSelectedStylePreset,
+        isLoading, loadingMessage,
+        onGenerate, onRemoveBackground, onClearAll, onTranslate, onOpenPromptEditor, onOpenNegativePromptEditor, onOpenPromptHelper,
         promptHistory, negativePromptHistory
     } = props;
     
@@ -89,9 +99,24 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
 
     const getButtonText = () => {
         if (mode === 'Video') return 'Generate Video';
+        if (mode === 'Tools') return 'Remove Background';
         if (isEditingImage) return 'Generate';
         return 'Create';
     };
+    
+    const handleActionClick = () => {
+        if (mode === 'Tools') {
+            if (baseImage) onRemoveBackground(baseImage);
+        } else {
+            onGenerate();
+        }
+    };
+
+    const getButtonIcon = () => {
+        if (isLoading) return <Spinner />;
+        if (mode === 'Tools') return <RemoveBgIcon />;
+        return <WandIcon />;
+    }
 
     return (
         <div className="bg-slate-800 rounded-lg p-4 space-y-6 h-full flex flex-col">
@@ -100,47 +125,94 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                 <div className="flex bg-slate-700 rounded-lg p-1">
                     <button
                         onClick={() => setMode('Image')}
-                        className={`w-1/2 py-2 text-sm font-semibold rounded-md transition-colors ${mode === 'Image' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
+                        className={`w-1/3 py-2 text-sm font-semibold rounded-md transition-colors ${mode === 'Image' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
                     >
                         Image
                     </button>
                     <button
                         onClick={() => setMode('Video')}
-                        className={`w-1/2 py-2 text-sm font-semibold rounded-md transition-colors ${mode === 'Video' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
+                        className={`w-1/3 py-2 text-sm font-semibold rounded-md transition-colors ${mode === 'Video' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
                     >
                         Video
+                    </button>
+                     <button
+                        onClick={() => setMode('Tools')}
+                        className={`w-1/3 py-2 text-sm font-semibold rounded-md transition-colors ${mode === 'Tools' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-600'}`}
+                    >
+                        Tools
                     </button>
                 </div>
 
                 {/* Base Image */}
-                {(mode === 'Video' || mode === 'Image') && (
-                     <ImageUploader label="Base Image" imageFile={baseImage} onImageUpload={(f) => onImageUpload(f, 'base')} onRemove={() => removeImage('base')} />
-                )}
+                <ImageUploader 
+                    label={mode === 'Tools' ? 'Image' : 'Base Image'} 
+                    imageFile={baseImage} 
+                    onImageUpload={(f) => onImageUpload(f, 'base')} 
+                    onRemove={() => removeImage('base')} 
+                />
 
-                {/* Main Prompt */}
-                <div>
-                    <label htmlFor="prompt" className="block text-sm font-medium text-slate-300 mb-1">Describe Your Vision</label>
-                    <div className="relative">
-                        <textarea
-                            id="prompt"
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                            placeholder={mode === 'Image' ? 'e.g., A cinematic photo of a robot in a neon-lit city...' : 'e.g., A drone shot of a futuristic city at sunset...'}
-                            rows={5}
-                            className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm pr-10"
-                            disabled={isLoading}
-                        />
-                         <div className="absolute top-2 right-2 flex flex-col gap-1.5">
-                             <div className="relative">
-                                 <button onClick={() => setPromptHistoryVisible(v => !v)} title="Prompt History" className="p-1.5 bg-slate-600/50 hover:bg-slate-500/80 rounded-full text-slate-300 transition"><HistoryIcon className="w-4 h-4" /></button>
-                                 <PromptHistoryDropdown history={promptHistory} onSelect={setPrompt} isVisible={isPromptHistoryVisible} setIsVisible={setPromptHistoryVisible} />
-                             </div>
-                             <button onClick={() => onTranslate(prompt, 'main')} title="Translate to English" className="p-1.5 bg-slate-600/50 hover:bg-slate-500/80 rounded-full text-slate-300 transition"><TranslateIcon className="w-4 h-4" /></button>
-                             <button onClick={onOpenPromptEditor} title="Expand Prompt" className="p-1.5 bg-slate-600/50 hover:bg-slate-500/80 rounded-full text-slate-300 transition"><EditIcon className="w-4 h-4" /></button>
-                             <button onClick={() => onOpenPromptHelper('guide')} title="Prompting Tips" className="p-1.5 bg-slate-600/50 hover:bg-slate-500/80 rounded-full text-slate-300 transition"><LightbulbIcon className="w-4 h-4" /></button>
+                {/* Main Prompt (Not in Tools mode) */}
+                {mode !== 'Tools' && (
+                    <div>
+                        <label htmlFor="prompt" className="block text-sm font-medium text-slate-300 mb-1">Describe Your Vision</label>
+                        <div className="relative">
+                            <textarea
+                                id="prompt"
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                placeholder={mode === 'Image' ? 'e.g., A cinematic photo of a robot in a neon-lit city...' : 'e.g., A drone shot of a futuristic city at sunset...'}
+                                rows={5}
+                                className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm pr-10"
+                                disabled={isLoading}
+                            />
+                            <div className="absolute top-2 right-2 flex flex-col gap-1.5">
+                                <div className="relative">
+                                    <button onClick={() => setPromptHistoryVisible(v => !v)} title="Prompt History" className="p-1.5 bg-slate-600/50 hover:bg-slate-500/80 rounded-full text-slate-300 transition"><HistoryIcon className="w-4 h-4" /></button>
+                                    <PromptHistoryDropdown history={promptHistory} onSelect={setPrompt} isVisible={isPromptHistoryVisible} setIsVisible={setPromptHistoryVisible} />
+                                </div>
+                                <button onClick={() => onTranslate(prompt, 'main')} title="Translate to English" className="p-1.5 bg-slate-600/50 hover:bg-slate-500/80 rounded-full text-slate-300 transition"><TranslateIcon className="w-4 h-4" /></button>
+                                <button onClick={onOpenPromptEditor} title="Expand Prompt" className="p-1.5 bg-slate-600/50 hover:bg-slate-500/80 rounded-full text-slate-300 transition"><EditIcon className="w-4 h-4" /></button>
+                                <button onClick={() => onOpenPromptHelper('guide')} title="Prompting Tips" className="p-1.5 bg-slate-600/50 hover:bg-slate-500/80 rounded-full text-slate-300 transition"><LightbulbIcon className="w-4 h-4" /></button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
+
+                {/* Video Settings (Video Mode Only) */}
+                {mode === 'Video' && (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="video-length" className="block text-sm font-medium text-slate-300 mb-1">
+                                Length (s)
+                            </label>
+                            <input
+                                id="video-length"
+                                type="number"
+                                min="2"
+                                max="15"
+                                value={videoLength}
+                                onChange={(e) => setVideoLength(parseInt(e.target.value, 10))}
+                                className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm"
+                                disabled={isLoading}
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="frame-rate" className="block text-sm font-medium text-slate-300 mb-1">
+                                Frame Rate (fps)
+                            </label>
+                            <input
+                                id="frame-rate"
+                                type="number"
+                                min="10"
+                                max="60"
+                                value={frameRate}
+                                onChange={(e) => setFrameRate(parseInt(e.target.value, 10))}
+                                className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm"
+                                disabled={isLoading}
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {/* Blend Image (Image Edit Mode Only) */}
                 {isEditingImage && (
@@ -178,17 +250,25 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                 {mode === 'Image' && !isEditingImage && (
                     <AspectRatioSelector selectedRatio={aspectRatio} onSelectRatio={setAspectRatio} />
                 )}
+
+                {/* Style Presets (Image Create Mode Only) */}
+                {mode === 'Image' && !isEditingImage && (
+                    <StylePresetSelector 
+                        selectedPreset={selectedStylePreset} 
+                        onSelectPreset={setSelectedStylePreset} 
+                    />
+                )}
             </div>
             
             {/* Action Buttons */}
             <div className="flex-shrink-0 space-y-2">
                 <button
-                    onClick={onGenerate}
-                    disabled={isLoading || !prompt}
+                    onClick={handleActionClick}
+                    disabled={isLoading || (mode === 'Tools' ? !baseImage : (mode !== 'Video' && !prompt))}
                     className="w-full flex justify-center items-center gap-2 py-3 px-4 bg-indigo-600 text-white font-bold rounded-md hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors"
                 >
-                    {isLoading ? <Spinner /> : <WandIcon />}
-                    {isLoading ? loadingMessage || 'Generating...' : getButtonText()}
+                    {getButtonIcon()}
+                    {isLoading ? loadingMessage || 'Processing...' : getButtonText()}
                 </button>
                 <button
                     onClick={onClearAll}

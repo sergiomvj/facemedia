@@ -1,5 +1,5 @@
 
-export type Mode = 'Image' | 'Video';
+export type Mode = 'Image' | 'Video' | 'Tools';
 
 export type AspectRatio = '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
 
@@ -17,6 +17,12 @@ export interface MediaResult {
   text?: string;
 }
 
+export interface StylePreset {
+  name: string;
+  prompt: string;
+  negativePrompt: string;
+}
+
 export interface Creation {
   id: number; // Using timestamp as ID
   userId: string; // Firebase User UID
@@ -27,6 +33,9 @@ export interface Creation {
   blendImage: ImageFile | null;
   aspectRatio: string;
   result: MediaResult;
+  videoLength?: number;
+  frameRate?: number;
+  stylePreset?: string;
 }
 
 export type GeminiImageGenConfig = {

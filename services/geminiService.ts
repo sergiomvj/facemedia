@@ -67,12 +67,14 @@ export const editImage = async (prompt: string, baseImage: ImageFile, blendImage
     let resultText = '';
     let resultImageSrc = '';
 
-    for (const part of response.candidates[0].content.parts) {
-        if (part.text) {
-            resultText += part.text;
-        } else if (part.inlineData) {
-            const base64ImageBytes: string = part.inlineData.data;
-            resultImageSrc = `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+    if (response.candidates && response.candidates.length > 0 && response.candidates[0].content && response.candidates[0].content.parts) {
+        for (const part of response.candidates[0].content.parts) {
+            if (part.text) {
+                resultText += part.text;
+            } else if (part.inlineData) {
+                const base64ImageBytes: string = part.inlineData.data;
+                resultImageSrc = `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+            }
         }
     }
 
@@ -81,11 +83,54 @@ export const editImage = async (prompt: string, baseImage: ImageFile, blendImage
     return { type: 'image', src: resultImageSrc, text: resultText };
 };
 
-export const generateVideo = async (prompt: string, baseImage: ImageFile | null): Promise<MediaResult> => {
+export const removeBackground = async (baseImage: ImageFile): Promise<MediaResult> => {
+    const parts = [
+        imageFileToPart(baseImage),
+        { text: 'Remove the background of this image, keeping only the main subject. The new background must be transparent.' }
+    ];
+
+    const response: GenerateContentResponse = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: { parts },
+        config: {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+        },
+    });
+
+    let resultText = '';
+    let resultImageSrc = '';
+
+    if (response.candidates && response.candidates.length > 0 && response.candidates[0].content && response.candidates[0].content.parts) {
+        for (const part of response.candidates[0].content.parts) {
+            if (part.text) {
+                resultText += part.text;
+            } else if (part.inlineData) {
+                const base64ImageBytes: string = part.inlineData.data;
+                resultImageSrc = `data:${part.inlineData.mimeType};base64,${base64ImageBytes}`;
+            }
+        }
+    }
+    
+    if (!resultImageSrc) throw new Error("The AI did not return an image. Try a different image.");
+
+    return { type: 'image', src: resultImageSrc, text: resultText };
+};
+
+export const generateVideo = async (
+    prompt: string, 
+    baseImage: ImageFile | null,
+    duration?: number,
+    fps?: number
+): Promise<MediaResult> => {
     if (!prompt) throw new Error("Prompt is required for video generation.");
     
-    // Fix: Removed 'VideosOperation' type annotation. The type will be inferred from the function return value.
     let operation;
+    
+    const config: { numberOfVideos: number, duration?: number, fps?: number } = { 
+        numberOfVideos: 1 
+    };
+    if (duration) config.duration = duration;
+    if (fps) config.fps = fps;
 
     if (baseImage) {
         operation = await ai.models.generateVideos({
@@ -95,13 +140,13 @@ export const generateVideo = async (prompt: string, baseImage: ImageFile | null)
                 imageBytes: baseImage.data,
                 mimeType: baseImage.mimeType,
             },
-            config: { numberOfVideos: 1 }
+            config
         });
     } else {
         operation = await ai.models.generateVideos({
             model: 'veo-2.0-generate-001',
             prompt,
-            config: { numberOfVideos: 1 }
+            config
         });
     }
 
